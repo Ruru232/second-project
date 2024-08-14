@@ -1,113 +1,281 @@
-import Image from "next/image";
+'use client';
+import { SetStateAction, useState, useEffect } from 'react';
+import { combinations } from './components/cardDeck';
+import Hands from './components/hands';
+import { motion } from 'framer-motion';
 
 export default function Home() {
+  // Create game
+  const [gameDeck, setGameDeck] = useState(combinations);
+  const [playerHand, setPlayerHand] = useState<CardType[]>([]);
+  const [dealerHand, setDealerHand] = useState<CardType[]>([]);
+  const [gameOver, setGameOver] = useState(false);
+  const [result, setResult] = useState({ type: '', message: '' });
+  const [newGame, setNewGame] = useState(false);
+
+  // Get random card from the deck
+  const getRandomCardFromDeck = () => {
+    const randomIndex = Math.floor(Math.random() * gameDeck.length);
+    const card = gameDeck[randomIndex];
+    const newDeck = gameDeck.filter((_, index) => index !== randomIndex);
+    setGameDeck(newDeck);
+    return card;
+  };
+
+  // Deal card to the player
+  type CardType = {
+    suit: string;
+    rank: string;
+  };
+
+  const dealCardToPlayer = () => {
+    const newHand = [...playerHand, getRandomCardFromDeck()];
+    setPlayerHand(newHand);
+    const playerValue = calculateHandValue(newHand);
+    console.log(newHand);
+    console.log(playerValue);
+    if (playerValue > 21) {
+      handleGameover({ type: 'dealer', message: 'Player Lost, Dealer Wins!' });
+    } else if (playerValue === 21) {
+      handleGameover({ type: 'player', message: 'Player Win, Dealer Lost!' });
+    }
+  };
+
+  // Deal card to the dealer
+  const playerStand = () => {
+    if (gameOver) return; // Prevent further action if the game is over
+    setGameOver(true);
+    const newHand = [...dealerHand, getRandomCardFromDeck()];
+    setDealerHand(newHand);
+    const dealerValue = calculateHandValue(newHand);
+    console.log(dealerValue);
+    if (dealerValue > 21) {
+      handleGameover({ type: 'player', message: 'Player Win, Dealer Lost!' });
+    }
+  };
+
+  const calculateHandValue = (hand: { rank: string }[]) => {
+    let value = 0;
+    let aceCount = 0;
+
+    hand.forEach((card: { rank: string }) => {
+      if (card.rank === 'J' || card.rank === 'Q' || card.rank === 'K') {
+        value += 10;
+      } else if (card.rank === 'A') {
+        aceCount += 1;
+        value += 11;
+      } else {
+        value += parseInt(card.rank);
+      }
+    });
+
+    while (value > 21 && aceCount > 0) {
+      value -= 10;
+      aceCount -= 1;
+    }
+
+    return value;
+  };
+
+  const handleGameover = (
+    result: SetStateAction<{ type: string; message: string }>
+  ) => {
+    setGameOver(true);
+    setResult(result);
+    setNewGame(true);
+  };
+
+  // Reset Game
+  const resetGame = () => {
+    setPlayerHand([]);
+    setDealerHand([]);
+    setGameOver(false);
+    setResult({ type: '', message: '' });
+    setNewGame(false);
+    setGameDeck(combinations);
+  };
+
+  // Player & dealer's hand value
+  const playerValue = calculateHandValue(playerHand);
+  const dealerValue = calculateHandValue(dealerHand);
+
+  // Game Logic
+  useEffect(() => {
+    if (playerHand.length === 0 && dealerHand.length === 0) {
+      setPlayerHand([getRandomCardFromDeck(), getRandomCardFromDeck()]);
+      setDealerHand([getRandomCardFromDeck()]);
+    }
+  }, [playerHand, dealerHand]);
+
+  // if player wins on first shuffle
+  useEffect(() => {
+    if (playerHand.length > 0) {
+      const playerValue = calculateHandValue(playerHand);
+      const dealerValue = calculateHandValue(dealerHand);
+
+      // Check game results when game is over
+      if (gameOver) {
+        // Dealer's turn
+        let updatedDealerHand = [...dealerHand];
+        while (calculateHandValue(updatedDealerHand) < 17) {
+          updatedDealerHand = [...updatedDealerHand, getRandomCardFromDeck()];
+        }
+        setDealerHand(updatedDealerHand);
+
+        const finalPlayerValue = calculateHandValue(playerHand);
+        const finalDealerValue = calculateHandValue(updatedDealerHand);
+
+        if (finalPlayerValue > 21) {
+          handleGameover({
+            type: 'dealer',
+            message: 'Player Lost, Dealer Wins!',
+          });
+        } else if (finalDealerValue > 21) {
+          handleGameover({
+            type: 'player',
+            message: 'Player Wins, Dealer Lost!',
+          });
+        } else if (finalPlayerValue > finalDealerValue) {
+          handleGameover({
+            type: 'player',
+            message: 'Player Wins, Dealer Lost!',
+          });
+        } else if (finalPlayerValue < finalDealerValue) {
+          handleGameover({
+            type: 'dealer',
+            message: 'Player Lost, Dealer Wins!',
+          });
+        } else {
+          handleGameover({ type: '', message: "It's a Draw!" });
+        }
+      }
+    }
+  }, [gameOver, playerHand, dealerHand]);
+
+  // Flip Animation
+  const [flip, setFlip] = useState(true);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
+    <main className="flex min-h-screen flex-col items-center p-24">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+        className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex"
+      >
+        <p
+          className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-orange-500 
+          backdrop-blur-2xl dark:border-neutral-800 dark:bg-orange-500 lg:relative lg:left-[40%] lg:w-auto 
+          lg:rounded-xl lg:border lg:bg-orange-500 lg:p-4"
+        >
+          Simple Black Jack Game
         </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      </motion.div>
+      <motion.div
+        transition={{ duration: 0.7 }}
+        animate={{ rotateY: flip ? 0 : 180 }}
+      >
+        <motion.div
+          transition={{ duration: 0.7 }}
+          animate={{ rotateY: flip ? 0 : 180 }}
+          className="Card"
+        >
+          <motion.div
+            transition={{ duration: 0.7 }}
+            animate={{ rotateY: flip ? 0 : 180 }}
+            className="back flex justify-center items-center"
           >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
-
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
+            <motion.button
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5 }}
+              onClick={() => setFlip((prevState) => !prevState)}
+              className="bg-orange-500 rounded-xl px-6 py-2 mt-10 "
+            >
+              Start Game
+            </motion.button>
+          </motion.div>
+          <motion.div
+            initial={{ rotateY: 180 }}
+            animate={{ rotateY: flip ? 180 : 0 }}
+            transition={{ duration: 0.7 }}
+            className="front"
+          >
+            <div
+              className={`text-white font-bold rounded-md text-center mt-4 py-2 ${
+                result && result.type === 'player'
+                  ? 'bg-green-600'
+                  : 'bg-red-700'
+              }`}
+            >
+              {gameOver && (
+                <div
+                  className={`text-white ${
+                    result && result.type === 'player'
+                      ? 'bg-green-600'
+                      : 'bg-red-700'
+                  } font-bold rounded-md
+          text-center py-4`}
+                >
+                  <h2 className="text-2xl ">{result.message}</h2>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-center gap-2">
+              <Hands
+                cards={playerHand}
+                title={"Player's Hand"}
+                handValue={playerValue}
+              />
+              <Hands
+                cards={dealerHand}
+                title={"Dealer's Hand"}
+                handValue={dealerValue}
+              />
+            </div>
+            <div className="flex justify-around gap-2 mt-4">
+              {!newGame ? (
+                <>
+                  <motion.button
+                    onClick={dealCardToPlayer}
+                    whileHover={{
+                      scale: 1.1,
+                      textShadow: '0px 0px 8px rgb(255,255,255)',
+                      boxShadow: '0px 0px 8px rgb(255,255,255)',
+                    }}
+                    className="bg-blue-600 text-white font-medium px-4 py-2 rounded-lg shadow-md mr-2"
+                  >
+                    Hit
+                  </motion.button>
+                  <motion.button
+                    onClick={playerStand}
+                    whileHover={{
+                      scale: 1.1,
+                      textShadow: '0px 0px 8px rgb(255,255,255)',
+                      boxShadow: '0px 0px 8px rgb(255,255,255)',
+                    }}
+                    className="bg-red-600 text-white font-medium px-4 py-2 rounded-lg shadow-md mr-2"
+                  >
+                    Stand
+                  </motion.button>
+                </>
+              ) : (
+                <motion.button
+                  onClick={resetGame}
+                  whileHover={{
+                    scale: 1.1,
+                    textShadow: '0px 0px 8px rgb(255,255,255)',
+                    boxShadow: '0px 0px 8px rgb(255,255,255)',
+                  }}
+                  className="bg-green-600 text-white font-medium px-4 py-2 rounded-lg shadow-md mr-2"
+                >
+                  Reset
+                </motion.button>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      </motion.div>
     </main>
   );
 }
