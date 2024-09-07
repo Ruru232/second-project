@@ -1,5 +1,5 @@
 'use client';
-import { SetStateAction, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { combinations } from './components/cardDeck';
 import Hands from './components/hands';
 import { motion } from 'framer-motion';
@@ -12,6 +12,16 @@ export default function Home() {
   const [gameOver, setGameOver] = useState(false);
   const [result, setResult] = useState({ type: '', message: '' });
   const [newGame, setNewGame] = useState(false);
+  const [playerBalance, setPlayerBalance] = useState(1000); // Starting balance
+  const [playerBet, setPlayerBet] = useState(0); // Current bet
+  const [isBetPlaced, setIsBetPlaced] = useState(false); // Check if the bet is placed
+
+  // Check if the player's balance reaches zero
+  useEffect(() => {
+    if (playerBalance <= 0) {
+      setGameOver(true); // End the game if balance is zero
+    }
+  }, [playerBalance]);
 
   // Get random card from the deck
   const getRandomCardFromDeck = () => {
@@ -77,12 +87,20 @@ export default function Home() {
     return value;
   };
 
-  const handleGameover = (
-    result: SetStateAction<{ type: string; message: string }>
-  ) => {
+  const handleGameover = (result: { type: string; message: string }) => {
     setGameOver(true);
     setResult(result);
-    setNewGame(true);
+
+    // Check if the balance has already been updated
+    if (!newGame) {
+      if (result.type === 'player') {
+        setPlayerBalance((prevBalance) => prevBalance + playerBet); // Player wins, add bet to balance
+      } else if (result.type === 'dealer') {
+        setPlayerBalance((prevBalance) => prevBalance - playerBet); // Player loses, deduct bet
+      }
+
+      setNewGame(true); // Mark the game as ended
+    }
   };
 
   // Reset Game
@@ -93,6 +111,8 @@ export default function Home() {
     setResult({ type: '', message: '' });
     setNewGame(false);
     setGameDeck(combinations);
+    setPlayerBet(0); // Reset bet
+    setIsBetPlaced(false); // Allow placing a new bet
   };
 
   // Player & dealer's hand value
@@ -101,11 +121,11 @@ export default function Home() {
 
   // Game Logic
   useEffect(() => {
-    if (playerHand.length === 0 && dealerHand.length === 0) {
+    if (isBetPlaced && playerHand.length === 0 && dealerHand.length === 0) {
       setPlayerHand([getRandomCardFromDeck(), getRandomCardFromDeck()]);
       setDealerHand([getRandomCardFromDeck()]);
     }
-  }, [playerHand, dealerHand]);
+  }, [isBetPlaced, playerHand, dealerHand]);
 
   // if player wins on first shuffle
   useEffect(() => {
@@ -113,18 +133,20 @@ export default function Home() {
       const playerValue = calculateHandValue(playerHand);
       const dealerValue = calculateHandValue(dealerHand);
 
-      // Check game results when game is over
       if (gameOver) {
-        // Dealer's turn
         let updatedDealerHand = [...dealerHand];
+
+        // Dealer draws until they reach at least 17
         while (calculateHandValue(updatedDealerHand) < 17) {
           updatedDealerHand = [...updatedDealerHand, getRandomCardFromDeck()];
         }
+
         setDealerHand(updatedDealerHand);
 
         const finalPlayerValue = calculateHandValue(playerHand);
         const finalDealerValue = calculateHandValue(updatedDealerHand);
 
+        // Determine the winner and call handleGameover
         if (finalPlayerValue > 21) {
           handleGameover({
             type: 'dealer',
@@ -165,12 +187,13 @@ export default function Home() {
       >
         <p
           className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-orange-500 
-          backdrop-blur-2xl dark:border-neutral-800 dark:bg-orange-500 lg:relative lg:left-[40%] lg:w-auto 
-          lg:rounded-xl lg:border lg:bg-orange-500 lg:p-4"
+        backdrop-blur-2xl dark:border-neutral-800 dark:bg-orange-500 lg:relative lg:left-[40%] lg:w-auto 
+        lg:rounded-xl lg:border lg:bg-orange-500 lg:p-4"
         >
           Simple Black Jack Game
         </p>
       </motion.div>
+
       <motion.div
         transition={{ duration: 0.7 }}
         animate={{ rotateY: flip ? 0 : 180 }}
@@ -195,6 +218,7 @@ export default function Home() {
               Start Game
             </motion.button>
           </motion.div>
+
           <motion.div
             initial={{ rotateY: 180 }}
             animate={{ rotateY: flip ? 180 : 0 }}
@@ -214,13 +238,13 @@ export default function Home() {
                     result && result.type === 'player'
                       ? 'bg-green-600'
                       : 'bg-red-700'
-                  } font-bold rounded-md
-          text-center py-4`}
+                  } font-bold rounded-md text-center py-4`}
                 >
                   <h2 className="text-2xl ">{result.message}</h2>
                 </div>
               )}
             </div>
+
             <div className="flex justify-center gap-2">
               <Hands
                 cards={playerHand}
@@ -233,33 +257,38 @@ export default function Home() {
                 handValue={dealerValue}
               />
             </div>
+
             <div className="flex justify-around gap-2 mt-4">
-              {!newGame ? (
-                <>
-                  <motion.button
-                    onClick={dealCardToPlayer}
-                    whileHover={{
-                      scale: 1.1,
-                      textShadow: '0px 0px 8px rgb(255,255,255)',
-                      boxShadow: '0px 0px 8px rgb(255,255,255)',
-                    }}
-                    className="bg-blue-600 text-white font-medium px-4 py-2 rounded-lg shadow-md mr-2"
-                  >
-                    Hit
-                  </motion.button>
-                  <motion.button
-                    onClick={playerStand}
-                    whileHover={{
-                      scale: 1.1,
-                      textShadow: '0px 0px 8px rgb(255,255,255)',
-                      boxShadow: '0px 0px 8px rgb(255,255,255)',
-                    }}
-                    className="bg-red-600 text-white font-medium px-4 py-2 rounded-lg shadow-md mr-2"
-                  >
-                    Stand
-                  </motion.button>
-                </>
+              {playerBalance > 0 && !newGame ? (
+                isBetPlaced ? (
+                  <>
+                    <motion.button
+                      onClick={dealCardToPlayer}
+                      whileHover={{
+                        scale: 1.1,
+                        textShadow: '0px 0px 8px rgb(255,255,255)',
+                        boxShadow: '0px 0px 8px rgb(255,255,255)',
+                      }}
+                      className="bg-blue-600 text-white font-medium px-4 py-2 rounded-lg shadow-md mr-2"
+                    >
+                      Hit
+                    </motion.button>
+
+                    <motion.button
+                      onClick={playerStand}
+                      whileHover={{
+                        scale: 1.1,
+                        textShadow: '0px 0px 8px rgb(255,255,255)',
+                        boxShadow: '0px 0px 8px rgb(255,255,255)',
+                      }}
+                      className="bg-red-600 text-white font-medium px-4 py-2 rounded-lg shadow-md mr-2"
+                    >
+                      Stand
+                    </motion.button>
+                  </>
+                ) : null // Hide Hit and Stand buttons if no bet is placed
               ) : (
+                // Reshuffle cards
                 <motion.button
                   onClick={resetGame}
                   whileHover={{
@@ -269,10 +298,109 @@ export default function Home() {
                   }}
                   className="bg-green-600 text-white font-medium px-4 py-2 rounded-lg shadow-md mr-2"
                 >
-                  Reset
+                  Reshuffle
                 </motion.button>
               )}
             </div>
+            {/* Betting system */}
+            {playerBalance > 0 ? (
+              <div className="flex flex-col items-center gap-4 mt-4">
+                <div>Player Balance: ${playerBalance}</div>
+                {!isBetPlaced ? (
+                  <>
+                    <div className="flex gap-4">
+                      {[1, 10, 100, 500, 1000]
+                        .filter((betAmount) => betAmount <= playerBalance)
+                        .map((betAmount) => (
+                          <motion.button
+                            key={betAmount}
+                            onClick={() => {
+                              const newBet = playerBet + betAmount;
+                              if (newBet <= playerBalance) {
+                                setPlayerBet(newBet);
+                              }
+                            }}
+                            whileHover={{
+                              scale: 1.1,
+                              textShadow: '0px 0px 8px rgb(255,255,255)',
+                              boxShadow: '0px 0px 12px rgb(255,255,255)',
+                            }}
+                            className={`flex items-center justify-center w-16 h-16 rounded-full border-4 border-gray-800 bg-gray-900 text-white font-bold text-lg shadow-lg ${
+                              playerBet >= betAmount ? 'bg-green-500' : ''
+                            }`}
+                          >
+                            ${betAmount}
+                          </motion.button>
+                        ))}
+                    </div>
+
+                    {/* Display total bet */}
+                    <div className="text-white font-bold mt-2">
+                      Total Bet: ${playerBet}
+                    </div>
+                    {/* Clear Bet Button */}
+                    <motion.button
+                      onClick={() => setPlayerBet(0)} // Clear bet to allow the player to choose again
+                      whileHover={{
+                        scale: 1.1,
+                        textShadow: '0px 0px 8px rgb(255,255,255)',
+                        boxShadow: '0px 0px 8px rgb(255,255,255)',
+                      }}
+                      className="bg-gray-600 text-white font-medium px-6 py-2 rounded-lg mt-2"
+                    >
+                      Clear Bet
+                    </motion.button>
+                    {/* Place Bet Button */}
+                    <motion.button
+                      onClick={() => {
+                        if (playerBet >= 1 && playerBet <= playerBalance) {
+                          setIsBetPlaced(true);
+                        } else {
+                          alert(
+                            `Bet a chip first! Your Current balance is $${playerBalance}`
+                          );
+                        }
+                      }}
+                      whileHover={{
+                        scale: 1.1,
+                        textShadow: '0px 0px 8px rgb(255,255,255)',
+                        boxShadow: '0px 0px 8px rgb(255,255,255)',
+                      }}
+                      className="bg-orange-600 text-white font-medium px-6 py-2 rounded-lg mt-4"
+                    >
+                      Place Bet
+                    </motion.button>
+                  </>
+                ) : (
+                  <div className="text-white font-bold">
+                    Bet Placed: ${playerBet}
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Show restart button when balance is zero
+              <>
+                <div className="flex justify-center">
+                  <p>Game over your balance is ${playerBalance} </p>
+                </div>
+                <div className="flex justify-center">
+                  <motion.button
+                    onClick={() => {
+                      setPlayerBalance(1000);
+                      resetGame();
+                    }}
+                    whileHover={{
+                      scale: 1.1,
+                      textShadow: '0px 0px 8px rgb(255,255,255)',
+                      boxShadow: '0px 0px 8px rgb(255,255,255)',
+                    }}
+                    className="bg-red-600 text-white font-medium px-6 py-2 rounded-lg mt-4"
+                  >
+                    Restart Game
+                  </motion.button>
+                </div>
+              </>
+            )}
           </motion.div>
         </motion.div>
       </motion.div>
